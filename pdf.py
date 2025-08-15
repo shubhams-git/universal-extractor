@@ -1,0 +1,51 @@
+from google import genai
+from google.genai import types
+import pathlib
+from typing import Dict, Any
+from pydantic import BaseModel
+import json # Import the json module
+
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+client = genai.Client()
+
+# Retrieve and encode the PDF byte
+filepath = pathlib.Path('input/file.pdf')
+
+prompt = """
+Extract the content into a json file to the best of your abilities. 
+If needed, clean and normalize the data to generate best quality output. 
+Critical requirement: High Accuracy in the data extraction is a must.
+IMPORTANT: The response should start with '{' and end with '}'
+"""
+response = client.models.generate_content(
+  model="gemini-2.5-flash",
+  contents=[
+      types.Part.from_bytes(
+        data=filepath.read_bytes(),
+        mime_type='application/pdf',
+      ),
+      prompt],
+      config=types.GenerateContentConfig(
+        thinking_config=types.ThinkingConfig(thinking_budget=1024),
+        response_mime_type='application/json',
+        temperature=0.1
+    ),
+    )
+if response.text:
+    try:
+        json_output = json.loads(response.text)
+        output_filepath = pathlib.Path('output.json')
+        with open(output_filepath, 'w', encoding='utf-8') as f:
+            json.dump(json_output, f, ensure_ascii=False, indent=4)
+        logger.info("Successfully parsed response and saved to %s", output_filepath)
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse response as JSON: %s", e)
+        logger.info("Response text: %s", response.text)
+    except Exception as e:
+        logger.error("An unexpected error occurred: %s", e)
+        logger.info("Response text: %s", response.text)
+else:
+    logger.warning("Response text was empty or None. Cannot parse to JSON.")
