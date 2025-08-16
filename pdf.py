@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 client = genai.Client()
 
 # Retrieve and encode the PDF byte
-filepath = pathlib.Path('output/file_example_XLS_100.pdf')
+filepath = pathlib.Path('temp/file_example_XLS_100_zoom70.pdf')
 
 prompt = """
 Extract the content into a json file to the best of your abilities. 
