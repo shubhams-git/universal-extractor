@@ -1,22 +1,21 @@
-# Core Gemini API dependency (required)
-google-genai>=0.8.0
+# Core Gemini API dependency (required) - Latest SDK
+google-genai>=1.0.0
 
-# File conversion dependencies (install as needed)
-
-# For Excel files (highly recommended for production use)
+# File conversion dependencies (required for Excel)
 aspose-cells-python>=24.1.0
 
-# For Word documents
-aspose-words>=24.1.0
+# Word document processing (optional - only needed for Word files)
+# Choose one or both:
+docx2txt>=0.8           # Simple text extraction from Word docs
+python-docx>=1.1.0      # Full Word document structure access
+reportlab>=4.0.0        # Required for Word to PDF conversion
 
-# For image processing and text-to-PDF conversion
-Pillow>=10.0.0
+# Text file processing (optional - only needed if you want text-to-PDF conversion)
+# Note: Gemini 2.5 Pro can process text files natively, so this is only for edge cases
+chardet>=5.0.0         # Character encoding detection for text files
 
-# For advanced document conversion (optional)
-pypandoc>=1.11
+# Data validation and parsing (recommended)
+pydantic>=2.0.0
 
-# For better text processing (optional)
-python-magic>=0.4.27
-
-# For enhanced file type detection
-mimetypes-plus>=1.0.0
+# Development and logging enhancements (optional)
+# colorlog>=6.7.0

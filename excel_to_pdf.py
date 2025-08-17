@@ -22,16 +22,16 @@ class ExcelToPdfService:
     """
     Production-ready Excel to PDF conversion service using Aspose.Cells.
     Preserves formulas, calculations, and Excel formatting for financial documents.
-    Enhanced with proper scaling and page fitting options.
+    Configured for a default zoom and landscape orientation.
     """
     
-    def __init__(self, default_fit_to_pages_wide: int = 1, default_orientation: str = "auto"):
+    def __init__(self, default_zoom_scale: int = 70, default_orientation: str = "landscape"):
         """
         Initialize the Excel to PDF service.
         
         Args:
-            default_fit_to_pages_wide: Default number of pages wide to fit content (1 = fit all columns on one page width)
-            default_orientation: Default page orientation ("auto", "portrait", "landscape")
+            default_zoom_scale: Default zoom percentage for PDF output (70 = 70%)
+            default_orientation: Default page orientation ("portrait", "landscape")
         """
         if not ASPOSE_AVAILABLE:
             raise ImportError(
@@ -39,7 +39,7 @@ class ExcelToPdfService:
                 "Install with: pip install aspose-cells-python"
             )
         
-        self.default_fit_to_pages_wide = default_fit_to_pages_wide
+        self.default_zoom_scale = default_zoom_scale
         self.default_orientation = default_orientation
     
     def get_excel_metadata(self, excel_path: str) -> Dict[str, Any]:
@@ -120,18 +120,14 @@ class ExcelToPdfService:
             logger.error(f"Failed to extract Excel metadata: {e}")
             return {}
     
-    def _configure_page_setup(self, worksheet, fit_to_pages_wide: Optional[int] = None, 
-                            fit_to_pages_tall: Optional[int] = None, 
-                            orientation: str = "auto", zoom_scale: Optional[int] = None):
+    def _configure_page_setup(self, worksheet, orientation: Optional[str] = None, zoom_scale: Optional[int] = None):
         """
         Configure page setup for optimal PDF output.
         
         Args:
             worksheet: The worksheet to configure
-            fit_to_pages_wide: Number of pages wide to fit content (None for default)
-            fit_to_pages_tall: Number of pages tall to fit content (None for auto)
-            orientation: Page orientation ("auto", "portrait", "landscape")
-            zoom_scale: Manual zoom percentage (overrides fit_to_pages if set)
+            orientation: Page orientation ("portrait", "landscape"). If None, uses default.
+            zoom_scale: Manual zoom percentage. If None, uses default.
         """
         try:
             page_setup = worksheet.page_setup
@@ -140,48 +136,21 @@ class ExcelToPdfService:
             page_setup.paper_size = PaperSizeType.PAPER_A4
             
             # Configure scaling options
-            if zoom_scale is not None:
-                # Manual zoom scaling
-                page_setup.zoom = zoom_scale
-                logger.info(f"Applied manual zoom: {zoom_scale}%")
-            else:
-                # Fit-to-pages scaling
-                fit_wide = fit_to_pages_wide if fit_to_pages_wide is not None else self.default_fit_to_pages_wide
-                
-                # Set fit to pages options
-                page_setup.fit_to_pages_wide = fit_wide
-                if fit_to_pages_tall is not None:
-                    page_setup.fit_to_pages_tall = fit_to_pages_tall
-                else:
-                    # Let height auto-adjust
-                    page_setup.fit_to_pages_tall = 0  # 0 means auto-adjust height
-                
-                logger.info(f"Applied fit-to-pages: {fit_wide} pages wide, auto height")
+            final_zoom_scale = zoom_scale if zoom_scale is not None else self.default_zoom_scale
+            page_setup.zoom = final_zoom_scale
+            logger.info(f"Applied manual zoom: {final_zoom_scale}%")
             
             # Set orientation
-            if orientation == "landscape":
+            final_orientation = orientation if orientation is not None else self.default_orientation
+            if final_orientation == "landscape":
                 page_setup.orientation = PageOrientationType.LANDSCAPE
                 logger.info("Set orientation: Landscape")
-            elif orientation == "portrait":
+            elif final_orientation == "portrait":
                 page_setup.orientation = PageOrientationType.PORTRAIT
                 logger.info("Set orientation: Portrait")
-            else:  # auto
-                # Auto-detect based on used range
-                try:
-                    used_range = worksheet.cells.max_display_range
-                    if used_range:
-                        cols = used_range.column_count
-                        rows = used_range.row_count
-                        if cols > rows * 1.5:  # More columns than rows, use landscape
-                            page_setup.orientation = PageOrientationType.LANDSCAPE
-                            logger.info("Auto-detected orientation: Landscape")
-                        else:
-                            page_setup.orientation = PageOrientationType.PORTRAIT
-                            logger.info("Auto-detected orientation: Portrait")
-                except:
-                    # Default to landscape for better column fitting
-                    page_setup.orientation = PageOrientationType.LANDSCAPE
-                    logger.info("Default orientation: Landscape")
+            else: # Default to landscape if "auto" or invalid
+                page_setup.orientation = PageOrientationType.LANDSCAPE
+                logger.info("Default orientation: Landscape")
             
             # Set margins for better space utilization
             page_setup.left_margin = 0.5
@@ -203,22 +172,18 @@ class ExcelToPdfService:
     def convert_excel_to_pdf(self, excel_path: str, pdf_path: str, 
                            sheet_indices: Optional[List[int]] = None,
                            recalculate_formulas: bool = True,
-                           fit_to_pages_wide: Optional[int] = None,
-                           fit_to_pages_tall: Optional[int] = None,
-                           orientation: str = "auto",
+                           orientation: Optional[str] = None,
                            zoom_scale: Optional[int] = None) -> bool:
         """
-        Convert Excel file to PDF with formula recalculation and proper scaling.
+        Convert Excel file to PDF with formula recalculation and specified zoom/orientation.
         
         Args:
             excel_path: Path to input Excel file
             pdf_path: Path for output PDF file
             sheet_indices: List of sheet indices to convert (None = all sheets)
             recalculate_formulas: Whether to recalculate formulas before export
-            fit_to_pages_wide: Number of pages wide to fit content (None for default)
-            fit_to_pages_tall: Number of pages tall to fit content (None for auto)
-            orientation: Page orientation ("auto", "portrait", "landscape")
-            zoom_scale: Manual zoom percentage (overrides fit_to_pages if set)
+            orientation: Page orientation ("portrait", "landscape"). If None, uses default.
+            zoom_scale: Manual zoom percentage. If None, uses default.
         
         Returns:
             bool: True if conversion successful, False otherwise
@@ -263,13 +228,11 @@ class ExcelToPdfService:
                     workbook.calculate_formula()
             
             # Configure page setup for all worksheets
-            logger.info("Configuring page setup for optimal PDF scaling...")
+            logger.info("Configuring page setup for optimal PDF output (zoom 70%, landscape)...")
             for i in range(len(workbook.worksheets)):
                 worksheet = workbook.worksheets[i]
                 self._configure_page_setup(
                     worksheet, 
-                    fit_to_pages_wide=fit_to_pages_wide,
-                    fit_to_pages_tall=fit_to_pages_tall,
                     orientation=orientation,
                     zoom_scale=zoom_scale
                 )
@@ -286,9 +249,7 @@ class ExcelToPdfService:
     
     def convert_sheet_to_pdf(self, excel_path: str, pdf_path: str, 
                            sheet_name: str, recalculate_formulas: bool = True,
-                           fit_to_pages_wide: Optional[int] = None,
-                           fit_to_pages_tall: Optional[int] = None,
-                           orientation: str = "auto",
+                           orientation: Optional[str] = None,
                            zoom_scale: Optional[int] = None) -> bool:
         """
         Convert a specific worksheet to PDF by name with scaling options.
@@ -298,10 +259,8 @@ class ExcelToPdfService:
             pdf_path: Path for output PDF file
             sheet_name: Name of the worksheet to convert
             recalculate_formulas: Whether to recalculate formulas before export
-            fit_to_pages_wide: Number of pages wide to fit content (None for default)
-            fit_to_pages_tall: Number of pages tall to fit content (None for auto)
-            orientation: Page orientation ("auto", "portrait", "landscape")
-            zoom_scale: Manual zoom percentage (overrides fit_to_pages if set)
+            orientation: Page orientation ("portrait", "landscape"). If None, uses default.
+            zoom_scale: Manual zoom percentage. If None, uses default.
         
         Returns:
             bool: True if conversion successful, False otherwise
@@ -324,8 +283,6 @@ class ExcelToPdfService:
                 excel_path, pdf_path, 
                 sheet_indices=[sheet_index], 
                 recalculate_formulas=recalculate_formulas,
-                fit_to_pages_wide=fit_to_pages_wide,
-                fit_to_pages_tall=fit_to_pages_tall,
                 orientation=orientation,
                 zoom_scale=zoom_scale
             )
@@ -335,16 +292,16 @@ class ExcelToPdfService:
             return False
     
     def batch_convert(self, input_files: List[str], output_dir: str = "output",
-                     fit_to_pages_wide: Optional[int] = None,
-                     orientation: str = "auto") -> Dict[str, Any]:
+                     orientation: Optional[str] = None,
+                     zoom_scale: Optional[int] = None) -> Dict[str, Any]:
         """
-        Convert multiple Excel files to PDF with scaling options.
+        Convert multiple Excel files to PDF with specified zoom/orientation.
         
         Args:
             input_files: List of Excel file paths
             output_dir: Output directory for PDF files
-            fit_to_pages_wide: Number of pages wide to fit content (None for default)
-            orientation: Page orientation ("auto", "portrait", "landscape")
+            orientation: Page orientation ("portrait", "landscape"). If None, uses default.
+            zoom_scale: Manual zoom percentage. If None, uses default.
         
         Returns:
             Dict containing conversion results
@@ -393,8 +350,8 @@ class ExcelToPdfService:
             # Convert to PDF with scaling options
             success = self.convert_excel_to_pdf(
                 str(input_path), str(pdf_path),
-                fit_to_pages_wide=fit_to_pages_wide,
-                orientation=orientation
+                orientation=orientation,
+                zoom_scale=zoom_scale
             )
             
             if success:
@@ -418,18 +375,14 @@ def main():
     """Main function for command-line usage."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Excel to PDF Conversion Service with Scaling")
+    parser = argparse.ArgumentParser(description="Excel to PDF Conversion Service with Zoom and Orientation")
     parser.add_argument("input", nargs="+", help="Input Excel file(s)")
     parser.add_argument("-o", "--output", default="temp", help="Output directory (default: temp)")
     parser.add_argument("-s", "--sheet", help="Convert specific sheet by name")
     parser.add_argument("--no-recalc", action="store_true", help="Skip formula recalculation")
-    parser.add_argument("-w", "--fit-width", type=int, default=1, 
-                       help="Fit content to N pages wide (default: 1)")
-    parser.add_argument("-h", "--fit-height", type=int, 
-                       help="Fit content to N pages tall (default: auto)")
-    parser.add_argument("--orientation", choices=["auto", "portrait", "landscape"], 
-                       default="auto", help="Page orientation (default: auto)")
-    parser.add_argument("--zoom", type=int, help="Manual zoom percentage (overrides fit options)")
+    parser.add_argument("--orientation", choices=["portrait", "landscape"], 
+                       default="landscape", help="Page orientation (default: landscape)")
+    parser.add_argument("--zoom", type=int, default=70, help="Manual zoom percentage (default: 70)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
     
     args = parser.parse_args()
@@ -439,7 +392,7 @@ def main():
     
     try:
         service = ExcelToPdfService(
-            default_fit_to_pages_wide=args.fit_width,
+            default_zoom_scale=args.zoom,
             default_orientation=args.orientation
         )
         
@@ -454,13 +407,11 @@ def main():
             pdf_path = output_path / pdf_filename
             
             print(f"Converting sheet '{args.sheet}' from {input_file}")
-            print(f"Scaling: {args.fit_width} pages wide, orientation: {args.orientation}")
+            print(f"Zoom: {args.zoom}%, orientation: {args.orientation}")
             
             success = service.convert_sheet_to_pdf(
                 input_file, str(pdf_path), args.sheet, 
                 recalculate_formulas=not args.no_recalc,
-                fit_to_pages_wide=args.fit_width,
-                fit_to_pages_tall=args.fit_height,
                 orientation=args.orientation,
                 zoom_scale=args.zoom
             )
@@ -473,12 +424,12 @@ def main():
         else:
             # Batch conversion
             print(f"Converting {len(args.input)} file(s)...")
-            print(f"Scaling: {args.fit_width} pages wide, orientation: {args.orientation}")
+            print(f"Zoom: {args.zoom}%, orientation: {args.orientation}")
             
             results = service.batch_convert(
                 args.input, args.output,
-                fit_to_pages_wide=args.fit_width,
-                orientation=args.orientation
+                orientation=args.orientation,
+                zoom_scale=args.zoom
             )
             
             print(f"\n📊 Conversion Results:")
@@ -505,20 +456,20 @@ def main():
     except Exception as e:
         print(f"❌ Error: {e}")
         logger.error(f"Unexpected error: {e}", exc_info=True)
-
-
+ 
+ 
 if __name__ == "__main__":
-    # Example usage for your specific case with enhanced scaling
+    # Example usage for your specific case with zoom and landscape orientation
     test_files = [
-        "input/file_example_XLS_100.xls",
+        "input/input.xlsx",
     ]
     
-    # Direct service usage with scaling options
+    # Direct service usage with zoom options
     try:
-        # Initialize service with default settings for better column fitting
+        # Initialize service with default settings for zoom and landscape
         service = ExcelToPdfService(
-            default_fit_to_pages_wide=1,  # Fit all columns to 1 page width
-            default_orientation="auto"    # Auto-detect best orientation
+            default_zoom_scale=70,        # Default to 70% zoom
+            default_orientation="landscape" # Default to landscape orientation
         )
         
         for file_path in test_files:
@@ -534,47 +485,32 @@ if __name__ == "__main__":
                 print(f"  Size: {metadata.get('file_size_mb', 'N/A')} MB")
                 print(f"  Worksheets: {metadata.get('worksheet_names', [])}")
                 
-                # Convert to PDF with enhanced scaling
+                # Convert to PDF with specified zoom and orientation
                 input_path = pathlib.Path(file_path)
-                pdf_filename = f"{input_path.stem}_scaled.pdf"
+                pdf_filename = f"{input_path.stem}_zoom70.pdf"
                 pdf_path = pathlib.Path("temp") / pdf_filename
                 
                 # Create output directory
                 pdf_path.parent.mkdir(parents=True, exist_ok=True)
                 
-                print(f"Converting with scaling options...")
-                print(f"  - Fit to 1 page wide")
-                print(f"  - Auto orientation detection")
+                print(f"Converting with zoom and orientation options...")
+                print(f"  - Zoom: 70%")
+                print(f"  - Orientation: Landscape")
                 print(f"  - Reduced margins for better space utilization")
                 
                 success = service.convert_excel_to_pdf(
                     file_path, str(pdf_path),
-                    fit_to_pages_wide=1,      # Fit all columns to 1 page width
-                    orientation="auto",       # Auto-detect best orientation
+                    zoom_scale=70,            # Manual 70% zoom
+                    orientation="landscape",  # Force landscape
                     recalculate_formulas=True
                 )
                 
                 if success:
                     print(f"✅ SUCCESS!")
                     print(f"PDF saved to: {pdf_path}")
-                    print(f"All columns should now fit on the page width!")
+                    print(f"PDF should now be at 70% zoom and landscape orientation!")
                 else:
                     print("❌ FAILED!")
-                    
-                # Alternative: Convert with manual zoom for more control
-                pdf_filename_zoom = f"{input_path.stem}_zoom70.pdf"
-                pdf_path_zoom = pathlib.Path("temp") / pdf_filename_zoom
-                
-                print(f"\nTrying alternative with 70% zoom...")
-                success_zoom = service.convert_excel_to_pdf(
-                    file_path, str(pdf_path_zoom),
-                    zoom_scale=70,            # Manual 70% zoom
-                    orientation="landscape",  # Force landscape
-                    recalculate_formulas=True
-                )
-                
-                if success_zoom:
-                    print(f"✅ Zoom version created: {pdf_path_zoom}")
                     
             else:
                 print(f"⚠️  File not found: {file_path}")
